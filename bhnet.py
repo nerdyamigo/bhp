@@ -38,7 +38,7 @@ def usage():
 
 # implementation for the features we are building our fake netcat with
 def client_sender(buffer):
-    client = socket.socket(socket.AF_INET, socekt.SOCK_STREAM)
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         # lets try to connect to our target host
         client.connect((target,port))
@@ -53,10 +53,10 @@ def client_sender(buffer):
             while recv_len:
 
                 data    = client.recv(4096)
-                rcv_len = len(data)
+                recv_len = len(data)
                 reponse+= data
 
-                if rcv_len < 4096:
+                if recv_len < 4096:
                     break
 
             print response, 
