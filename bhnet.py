@@ -8,6 +8,7 @@ import subprocess
 
 # deinfe some globals here
 # nothing too hard here just setting some flags
+
 listen              = False
 command             = False
 upload              = False
@@ -19,9 +20,9 @@ port                = 0
 # function responsible for handling command line arguments and calling
 # the rest of our functions
 def usage():
-    print "NetCat Pirata Network Tool"
+    print "BHP Network Tool"
     print
-    print "Usage: netcat_pirata.py -t [target_host] -p [port_number]"
+    print "Usage: bhnet.py -t [target_host] -p [port_number]"
     print "-l --listen                  - listen on [host]:[port] for incoming connections"
     print "-e --execute=file_to_run     - execute the given file upon receiving a connection"
     print "-c --command                 - initialize a command shell"
@@ -29,9 +30,9 @@ def usage():
     print
     print
     print "Example: "
-    print "netcat_pirata.py -t 192.168.0.1 -p 5555 -l -c"
-    print "netcat_pirata.py -t 192.168.0.1 -p 5555 -l -u=c:\\target.exe"
-    print "netcat_pirata.py -t 192.168.0.1 -p 5555 -l -e=\"cat /etc/passwd\""
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -c"
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -u=c:\\target.exe"
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -e=\"cat /etc/passwd\""
     print "echo 'ABCDEFGHIJ' | ./netcat_pirata.py -t 192.168.11.12 -p 135"
     sys.exit(0)
 
@@ -208,13 +209,13 @@ def main():
             assert False, "Unhandled Option"
 
         # are we going to listen or jsut send data from stdin?
-        # if not listen and len(target) and port > 0;
+        if not listen and len(target) and port > 0:
 
             # read in the buffer from the commandline
             # this will block, so send crl-d if not the sending input
             # to stdin
 
-            buffer= sys.stdin.read()
+            buffer = sys.stdin.read()
 
             # send the data off
             client_sender(buffer)
