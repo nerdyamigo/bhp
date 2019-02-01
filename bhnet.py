@@ -6,7 +6,7 @@ import getopt
 import threading
 import subprocess
 
-# deinfe some globals here
+# define some globals here
 # nothing too hard here just setting some flags
 
 listen              = False
@@ -33,12 +33,13 @@ def usage():
     print "bhnet.py -t 192.168.0.1 -p 5555 -l -c"
     print "bhnet.py -t 192.168.0.1 -p 5555 -l -u=c:\\target.exe"
     print "bhnet.py -t 192.168.0.1 -p 5555 -l -e=\"cat /etc/passwd\""
-    print "echo 'ABCDEFGHIJ' | ./netcat_pirata.py -t 192.168.11.12 -p 135"
+    print "echo 'ABCDEFGHIJ' | ./bhnet.py -t 192.168.11.12 -p 135"
     sys.exit(0)
 
 # implementation for the features we are building our fake netcat with
 def client_sender(buffer):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
     try:
         # lets try to connect to our target host
         client.connect((target,port))
@@ -152,21 +153,21 @@ def client_handler(client_socket):
             if len(execute):
 
                 # run the command
-                output = run_command(command)
-                client.socket.send(output)
+                output = run_command(execute)
+                client_socket.send(output)
 
-                # now we go into another loop if a comman shell was requested
+                # now we go into another loop if a command shell was requested
 
                 if command:
 
                     while True: 
                         # show a simple prompt
-                        client_socket.send("NETCATpirata:#> ")
+                        client_socket.send("BHP:#> ")
                             
                         # we receive until we see a linefeed
                         cmd_buffer = ""
                         while "\n" not in cmd_buffer:
-                            cmd_buffer += client.socket.recv(1024)
+                            cmd_buffer += client_socket.recv(1024)
 
                         # send back the command output
                         response = run_command(cmd_buffer)
@@ -177,6 +178,7 @@ def client_handler(client_socket):
 def main():
     global listen
     global port
+    global execute
     global command
     global upload_destination
     global target
